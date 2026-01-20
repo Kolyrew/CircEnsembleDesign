@@ -18,6 +18,7 @@ int main(int argc, char** argv) {
     bool is_verbose = true;
     unsigned int rand_seed = 0;
     string init_solution = "";
+    string ires = "";
 
     string CODON_TABLE = "./codon_usage_freq_table_human.csv";
 
@@ -27,6 +28,7 @@ int main(int argc, char** argv) {
     if (argc > 4) epsilon = atof(argv[4]);
     if (argc > 5) rand_seed = atoi(argv[5]);
     if (argc > 6) init_solution = argv[6];
+    if (argc > 7) ires = argv[7];
 
     Codon codon(CODON_TABLE);
     std::unordered_map<std::string, Lattice> aa_graphs_with_ln_weights;
@@ -68,7 +70,7 @@ int main(int argc, char** argv) {
         if (!ReaderTraits<Fasta>::cvt_to_seq(aa_seq, aa_tri_seq)) 
             continue;
 
-        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed);
+        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, ires);
 
         auto protein = util::split(aa_tri_seq, ' ');
         auto dfa = get_dfa(aa_graphs_with_ln_weights, util::split(aa_tri_seq, ' '));

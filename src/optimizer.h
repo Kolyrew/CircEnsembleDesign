@@ -130,6 +130,7 @@ public:
     bool enable_cube_pruning=false;
     unsigned int rand_seed=0;
     std::string init_solution;
+    std::string ires;
 
     using State_t = State<ScoreType>;
     using DFA_t = WDFA;
@@ -142,7 +143,7 @@ public:
     using sorted_BestM_t = unordered_map<NodeType, vector<ScoreInnerDate_t>, hash_pair>;
     using PrefixScore_t = unordered_map<NodeType, ScoreType, hash_pair>;
 
-    Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_);
+    Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_, std::string ires_);
 
     void optimize(DFA_t& dfa,
         Codon& codon, 

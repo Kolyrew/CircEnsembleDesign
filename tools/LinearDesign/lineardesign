@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import gflags as flags
 import subprocess
@@ -21,7 +21,10 @@ def main():
 
     path = os.path.dirname(os.path.abspath(__file__))
     cmd = ["%s/%s" % (path, ('bin/LinearDesign_2D')), lambda_, verbose_, codon_usage]
-    subprocess.call(cmd, stdin=sys.stdin)
+    env = os.environ.copy()
+    env_lib_path = os.path.join(path, 'src', 'Utils', 'libraries')
+    env['LD_LIBRARY_PATH'] = env_lib_path + (':' + env.get('LD_LIBRARY_PATH', ''))
+    subprocess.call(cmd, stdin=sys.stdin, env=env)
     
 if __name__ == '__main__':
     setgflags()

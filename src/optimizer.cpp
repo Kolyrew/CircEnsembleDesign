@@ -1167,12 +1167,12 @@ void Optimizer::optimize(
     }
 
     cout << string(seq_length, '-') << endl;
-    cout<<"Final mRNA sequence: "<<best_nuc_seq.first<<endl;
+    cout<<"Final mRNA sequence: "<< ires + best_nuc_seq.first <<endl;
 }
 
-Optimizer::Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_)
+Optimizer::Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_, std::string ires_)
         : beam_size(beam_size_), num_epochs(num_epochs_), learning_rate(learning_rate_), epsilon(epsilon_),
-          init_solution(init_solution_), is_verbose(is_verbose_), rand_seed(rand_seed_) {
+          init_solution(init_solution_), is_verbose(is_verbose_), rand_seed(rand_seed_), ires(ires_) {
         func1();
 }
 

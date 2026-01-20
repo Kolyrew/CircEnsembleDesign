@@ -1,0 +1,5 @@
+Iteration [1]: obj: -53.5912
+Iteration [2]: obj: -55.0716
+Iteration [3]: obj: -56.7391
+---------------------------------------------------------------------------------
+Final mRNA sequence: GGCUGUGAGGAACUACUGUCUUCACGCCUUCGGGAGUGUCGUGCAGCCUCCAGCCAUGAAUGAGUACCAGUUUGUGCUCCCCUAUCCGCCGUCAUUGAAUACUUAUUGGCGGCGGAGGGGGAGCCAGUACUACAUU

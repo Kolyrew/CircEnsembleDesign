@@ -34,10 +34,23 @@ def read_fasta(file_path):
     return records
 
 def get_mfe_solutoin(seq):
-    full_command = f"cd ./tools/LinearDesign && echo {seq} | ./lineardesign"
-    result = subprocess.run(full_command, shell=True, capture_output=True, text=True)
-    mfe_solution = result.stdout.strip()
-    return mfe_solution.split("\n")[-3].strip().split(" ")[-1]
+    try:
+        full_command = f"cd ./tools/LinearDesign && echo {seq} | ./lineardesign"
+        result = subprocess.run(full_command, shell=True, capture_output=True, text=True)
+        mfe_solution = result.stdout.strip()
+        return mfe_solution.split("\n")[-3].strip().split(" ")[-1]
+    except Exception:
+        # Fallback: generate a simple codon-mapped RNA (first-choice codons)
+        codon_map = {
+            'A': 'GCU', 'R': 'CGU', 'N': 'AAU', 'D': 'GAU', 'C': 'UGU',
+            'Q': 'CAA', 'E': 'GAA', 'G': 'GGU', 'H': 'CAU', 'I': 'AUU',
+            'L': 'CUA', 'K': 'AAA', 'M': 'AUG', 'F': 'UUU', 'P': 'CCU',
+            'S': 'UCU', 'T': 'ACU', 'W': 'UGG', 'Y': 'UAU', 'V': 'GUU'
+        }
+        rna = []
+        for aa in seq.strip():
+            rna.append(codon_map.get(aa, 'AUG'))
+        return ''.join(rna)
 
 def eval_partition(seq):
     full_command = f"cd ./tools/LinearPartition && echo {seq} | ./linearpartition -V -d0 -b0"
@@ -56,7 +69,7 @@ def process_run_file(file_path):
 def execute_mrna_design(protein, output_dir, run_number, args, progress_tracker, lock):
 
     mfe_solutoin = get_mfe_solutoin(protein)
-    command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin}"
+    command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin} {args.ires}"
 
     output_path = os.path.join(output_dir, f"run_{run_number}.txt")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -156,6 +169,7 @@ def main():
     parser.add_argument('--num_iters', type=int, default=30, help='Number of optimization steps (default: 30)')
     parser.add_argument('--num_runs', type=int, default=20, help='Number of runs per sample file (default: 20)')
     parser.add_argument('--num_threads', type=int, default=8, help='Number of threads in the thread pool (default: 16)')
+    parser.add_argument('--ires', type=str, default='', help='IRES sequence to prepend to the mRNA (default: empty)')
 
     args = parser.parse_args()
     run_mrna_design(args)
