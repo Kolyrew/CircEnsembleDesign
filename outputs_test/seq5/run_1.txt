@@ -1,5 +1,1 @@
-Iteration [1]: obj: -11.2355
-Iteration [2]: obj: -11.5725
-Iteration [3]: obj: -11.9334
----------------------------
-Final mRNA sequence: UUCGUUGCUUUUUGUAGUAUAAUUAAAUAUUUGUCAUAUAAGAGAUUGGUUAGAGAUUUGUUCUUUGUUUGAGCCUCCAUGACGAACAUGGAGUUAAUG
+Segmentation fault (core dumped)

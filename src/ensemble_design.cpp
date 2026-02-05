@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
         if (!ReaderTraits<Fasta>::cvt_to_seq(aa_seq, aa_tri_seq)) 
             continue;
 
-        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, ires);
+        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, ires, ires.length());
 
         auto protein = util::split(aa_tri_seq, ' ');
         auto dfa = get_dfa(aa_graphs_with_ln_weights, util::split(aa_tri_seq, ' '));

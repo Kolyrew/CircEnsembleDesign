@@ -33,12 +33,25 @@ def read_fasta(file_path):
             records.append((seq_id, "".join(seq_lines)))
     return records
 
-def get_mfe_solutoin(seq):
+def get_mfe_solutoin(seq, ires=""):
     try:
-        full_command = f"cd ./tools/LinearDesign && echo {seq} | ./lineardesign"
-        result = subprocess.run(full_command, shell=True, capture_output=True, text=True)
-        mfe_solution = result.stdout.strip()
-        return mfe_solution.split("\n")[-3].strip().split(" ")[-1]
+        if ires:
+            # For now, use fallback when IRES is present
+            codon_map = {
+                'A': 'GCU', 'R': 'CGU', 'N': 'AAU', 'D': 'GAU', 'C': 'UGU',
+                'Q': 'CAA', 'E': 'GAA', 'G': 'GGU', 'H': 'CAU', 'I': 'AUU',
+                'L': 'CUA', 'K': 'AAA', 'M': 'AUG', 'F': 'UUU', 'P': 'CCU',
+                'S': 'UCU', 'T': 'ACU', 'W': 'UGG', 'Y': 'UAU', 'V': 'GUU'
+            }
+            rna = []
+            for aa in seq.strip():
+                rna.append(codon_map.get(aa, 'AUG'))
+            return ''.join(rna)
+        else:
+            full_command = f"cd ./tools/LinearDesign && echo {seq} | ./lineardesign"
+            result = subprocess.run(full_command, shell=True, capture_output=True, text=True)
+            mfe_solution = result.stdout.strip()
+            return mfe_solution.split("\n")[-3].strip().split(" ")[-1]
     except Exception:
         # Fallback: generate a simple codon-mapped RNA (first-choice codons)
         codon_map = {
@@ -68,7 +81,7 @@ def process_run_file(file_path):
 
 def execute_mrna_design(protein, output_dir, run_number, args, progress_tracker, lock):
 
-    mfe_solutoin = get_mfe_solutoin(protein)
+    mfe_solutoin = get_mfe_solutoin(protein, args.ires)
     command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin} {args.ires}"
 
     output_path = os.path.join(output_dir, f"run_{run_number}.txt")

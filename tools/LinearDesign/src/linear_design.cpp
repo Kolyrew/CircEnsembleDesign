@@ -48,9 +48,10 @@ int main(int argc, char** argv) {
     double lambda = 0.0f;
     bool is_verbose = false;
     string CODON_TABLE = "./codon_usage_freq_table_human.csv";
+    int fixed_prefix_len = 0;
 
     // parse args
-    if (argc != 4) {
+    if (argc < 4) {
         show_usage();
         return 1;
     }else{
@@ -58,6 +59,12 @@ int main(int argc, char** argv) {
         is_verbose = atoi(argv[2]) == 1;
         if (string(argv[3]) != ""){
             CODON_TABLE = argv[3];
+        }
+        for (int i = 4; i < argc; ++i) {
+            if (string(argv[i]) == "--fixed-prefix" && i + 1 < argc) {
+                fixed_prefix_len = atoi(argv[i + 1]);
+                i++;
+            }
         }
     } 
     lambda *= 100.;
