@@ -82,7 +82,7 @@ def process_run_file(file_path):
 def execute_mrna_design(protein, output_dir, run_number, args, progress_tracker, lock):
 
     mfe_solutoin = get_mfe_solutoin(protein, args.ires)
-    command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin} {args.ires}"
+    command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin} {args.ires} {args.ires_orf_lambda}"
 
     output_path = os.path.join(output_dir, f"run_{run_number}.txt")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -183,6 +183,7 @@ def main():
     parser.add_argument('--num_runs', type=int, default=20, help='Number of runs per sample file (default: 20)')
     parser.add_argument('--num_threads', type=int, default=8, help='Number of threads in the thread pool (default: 16)')
     parser.add_argument('--ires', type=str, default='', help='IRES sequence to prepend to the mRNA (default: empty)')
+    parser.add_argument('--ires_orf_lambda', type=float, default=1.0, help='Penalty factor for IRES-ORF base pairing (default: 1.0, no penalty; use < 1.0 like 0.1 to discourage IRES-ORF pairs)')
 
     args = parser.parse_args()
     run_mrna_design(args)

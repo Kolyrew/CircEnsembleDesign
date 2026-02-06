@@ -1,0 +1,6 @@
+IRES-ORF penalty enabled: lambda = 0.1 (energy penalty = 141.913 kT)
+Iteration [1]: obj: -12.0415
+Iteration [2]: obj: -14.2446
+Iteration [3]: obj: -15.8791
+---------------------------------------------------------------------------------------------------------------------------
+Final mRNA sequence: UUCGUUGCUUUUUGUAGUAUAAUUAAAUAUUUGUCAUAUAAGAGAUUGGUUAGAGAUUUGUUCUUUGUUUGAAUGAAUACGUACCAUAUUACUUUGCCUUGGCCUCCGAGUAACAAUAGAUAC

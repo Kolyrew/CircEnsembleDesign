@@ -84,6 +84,8 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                             const auto& jnext_1_param = std::get<3>(*jnext_ledge_ptr);
 
                             ScoreType score_hairpin = - func4(j + fixed_prefix_len, jnext + fixed_prefix_len, j_nuc, j1_nuc, jnext_1_nuc, jnext_nuc, tetra_hex_tri) / kT;
+                            // Apply IRES-ORF penalty if the closing pair spans regions
+                            score_hairpin += apply_cross_region_penalty(j + fixed_prefix_len, jnext + fixed_prefix_len);
                             Parameters params = {j_param, jnext_param, j1_param, jnext_1_param};
 
                             update_state<phase>(bestH[jnext_node][j_node][pair_nuc], score_hairpin, params);
@@ -173,6 +175,8 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                                 ScoreType score_hairpin =
                                         -func4(i + fixed_prefix_len, jnext + fixed_prefix_len, i_nuc, i1_nuc, jnext_1_nuc, jnext_nuc,
                                                          tetra_hex_tri) / kT;
+                                // Apply IRES-ORF penalty if the closing pair spans regions
+                                score_hairpin += apply_cross_region_penalty(i + fixed_prefix_len, jnext + fixed_prefix_len);
                                 Parameters params = {i_param, jnext_param, i1_param, jnext_1_param};
 
                                 update_state<phase>(bestH[jnext_node][i_node][pair_nuc_i_jnext], score_hairpin, params);
@@ -246,6 +250,9 @@ void Optimizer::Multi_beam(IndexType j, IndexType j_num, DFA_t& dfa){
             //  2. generate multi(i, j) -> p(i, j)
 
             ScoreType score_P_eq_Multi = -func12(i, j, i_nuc, -1, -1, j_1_nuc, seq_length) / kT;
+            // Apply IRES-ORF penalty if the multi-loop closing pair spans regions
+            // i is already absolute (i_node.first + fixed_prefix_len), j needs conversion
+            score_P_eq_Multi += apply_cross_region_penalty(i, j + fixed_prefix_len - 1);
             update_state<phase>(bestP[j_node][i_node][pair_nuc], state_Multi, score_P_eq_Multi);
         }
     }
@@ -288,6 +295,11 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                         auto outer_pair = NTP(i_1_nuc, j_nuc);
                         if (_allowed_pairs[i_1_nuc][j_nuc]) {
                             ScoreType score_stacking = stacking_score[outer_pair - 1][pair_nuc - 1] / kT;
+                            // Apply IRES-ORF penalty if the outer pair spans regions
+                            // i_1 is at position (i-1) + fixed_prefix_len, j is at j + fixed_prefix_len
+                            IndexType i_1_abs = i - 1;  // i is already absolute (i_node.first + fixed_prefix_len)
+                            IndexType j_abs = j + fixed_prefix_len;
+                            score_stacking += apply_cross_region_penalty(i_1_abs, j_abs);
                             Parameters params = {i_1_param, j_param};
 
                             update_state<phase>(bestP[j1_node][i_1_node][outer_pair], state_P, score_stacking, params);
@@ -328,6 +340,10 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                     continue;
 
                                 ScoreType score_bulge = bulge_score[outer_pair - 1][pair_nuc - 1][q - j - 1] / kT;
+                                // Apply IRES-ORF penalty if the outer pair spans regions
+                                IndexType i_1_abs = i - 1;  // i is already absolute
+                                IndexType q_abs = q + fixed_prefix_len;  // q is DFA position
+                                score_bulge += apply_cross_region_penalty(i_1_abs, q_abs);
                                 Parameters params = {i_1_param, q_param};
 
                                 update_state<phase>(bestP[q1_node][i_1_node][outer_pair], state_P, score_bulge, params);
@@ -371,6 +387,11 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
 
                                 // Both i and p are now absolute positions
                                 ScoreType score_bulge = bulge_score[outer_pair - 1][pair_nuc - 1][i - p - 1] / kT;
+                                // Apply IRES-ORF penalty if the outer pair spans regions
+                                // p_1 is at absolute position p - 1, j is at j + fixed_prefix_len
+                                IndexType p_1_abs = p - 1;  // p is already absolute
+                                IndexType j_abs = j + fixed_prefix_len;
+                                score_bulge += apply_cross_region_penalty(p_1_abs, j_abs);
                                 Parameters params = {p_1_param, j_param};
 
                                 update_state<phase>(bestP[j1_node][p_1_node][outer_pair], state_P, score_bulge, params);
@@ -397,6 +418,8 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                             IndexType p_dfa = p - fixed_prefix_len;  // Convert p to DFA position
                             
                             // Skip if p is in IRES region (before protein sequence)
+                            // Note: To enable IRES-ORF pairing, this check would need to be modified
+                            // and special handling for IRES positions added
                             if (p_dfa < 0) continue;
                             
                             vector <NodeType> p_node_list;
@@ -475,6 +498,9 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                                 -func5(p - 1, q + fixed_prefix_len, i, j - 1 + fixed_prefix_len, p_1_nuc, p_nuc,
                                                                                 j_nuc, q_nuc, i_1_nuc, i_nuc, j_1_nuc,
                                                                                 j_nuc) / kT;
+                                                        // Apply IRES-ORF penalty if the outer pair spans regions
+                                                        // Outer pair: (p_1, q) where p_1 = p - 1 (absolute), q = q + fixed_prefix_len (DFA to abs)
+                                                        score_internal += apply_cross_region_penalty(p - 1, q + fixed_prefix_len);
                                                         Parameters params = {p_param, p_1_param, j_param, q_param};
 
                                                         if (p == i - 1) { // case: p_1 p i ... j_1 j q
@@ -497,6 +523,8 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                                         -func5(p - 1, q + fixed_prefix_len, i, j - 1 + fixed_prefix_len, p_1_nuc,
                                                                                         p_nuc, q_1_nuc, q_nuc, i_1_nuc,
                                                                                         i_nuc, j_1_nuc, j_nuc) / kT;
+                                                                // Apply IRES-ORF penalty if the outer pair spans regions
+                                                                score_internal += apply_cross_region_penalty(p - 1, q + fixed_prefix_len);
                                                                 Parameters params = {p_param, p_1_param, j_param,
                                                                                      q_1_param, q_param};
 
@@ -524,6 +552,8 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                                         -func5(p - 1, q + fixed_prefix_len, i, j - 1 + fixed_prefix_len, p_1_nuc,
                                                                                         p_nuc, q_1_nuc, q_nuc, i_1_nuc,
                                                                                         i_nuc, j_1_nuc, j_nuc) / kT;
+                                                                // Apply IRES-ORF penalty if the outer pair spans regions
+                                                                score_internal += apply_cross_region_penalty(p - 1, q + fixed_prefix_len);
                                                                 Parameters params = {p_param, p_1_param, j_param,
                                                                                      q_1_param, q_param};
 
@@ -548,6 +578,8 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                                         -func5(p - 1, q + fixed_prefix_len, i, j - 1 + fixed_prefix_len, p_1_nuc,
                                                                                         p_nuc, q_1_nuc, q_nuc, i_1_nuc,
                                                                                         i_nuc, j_1_nuc, j_nuc) / kT;
+                                                                // Apply IRES-ORF penalty if the outer pair spans regions
+                                                                score_internal += apply_cross_region_penalty(p - 1, q + fixed_prefix_len);
                                                                 Parameters params = {p_param, p_1_param, j_param, q_1_param, q_param};
 
                                                                 //double weight_left;
@@ -593,7 +625,9 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
 
                 ScoreType score_M_eq_P =
                         -func9(i + fixed_prefix_len, j - 1 + fixed_prefix_len, j - 1 + fixed_prefix_len, -1, i_nuc, j_1_nuc, -1, seq_length) / kT;
-
+                // Apply IRES-ORF penalty if the pair (i, j) spans regions
+                // i is DFA position, j is DFA position
+                score_M_eq_P += apply_cross_region_penalty(i + fixed_prefix_len, j + fixed_prefix_len);
 
                 update_state<phase>(bestM[j_node][i_node], state_P, score_M_eq_P);
 
@@ -611,6 +645,9 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
 
             // C = C + P
             ScoreType score_C_eq_C_plus_P = - func14(i, j-1, i_nuc, j_1_nuc, seq_length) / kT;
+            // Apply IRES-ORF penalty if the pair (i, j-1) spans regions
+            // i is DFA position, j is DFA position
+            score_C_eq_C_plus_P += apply_cross_region_penalty(i + fixed_prefix_len, j - 1 + fixed_prefix_len);
 
             if (i > 0){
                 auto& state_C = bestC[i_node];
@@ -677,9 +714,12 @@ void Optimizer::M2_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                             const auto& q_nuc_ = std::get<2>(*q_redge_ptr);
                             if (q_nuc != q_nuc_) continue;
                             const auto& q1_node = std::get<1>(*q_redge_ptr);
+                            // Apply IRES-ORF penalty if the outer pair spans regions
+                            // p is absolute, q is absolute (converted above)
+                            ScoreType penalty = apply_cross_region_penalty(p, q);
                             Parameters params = {p_param, q_param};
 
-                            update_state<phase>(bestMulti[q1_node][p_node][outer_pair], state_M2, 0, params, j_node);
+                            update_state<phase>(bestMulti[q1_node][p_node][outer_pair], state_M2, penalty, params, j_node);
                             break;
                         }
                     }
@@ -1185,6 +1225,12 @@ void Optimizer::optimize(
     }
     dfa.validate_and_project_probabilities();
 
+    // Print IRES-ORF penalty information
+    if (fixed_prefix_len > 0 && ires_orf_lambda < 1.0) {
+        cout << "IRES-ORF penalty enabled: lambda = " << ires_orf_lambda 
+             << " (energy penalty = " << -kT * log(ires_orf_lambda) << " kT)" << endl;
+    }
+
     ScoreType best_obj = 0;
     auto best_nuc_seq = dfa.get_best_nuc_sequence(seq_length - fixed_prefix_len);
     best_nuc_seq.first = ires + best_nuc_seq.first;
@@ -1219,9 +1265,9 @@ void Optimizer::optimize(
     cout<<"Final mRNA sequence: "<< best_nuc_seq.first <<endl;
 }
 
-Optimizer::Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_, std::string ires_, int fixed_prefix_len_)
+Optimizer::Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_, std::string ires_, int fixed_prefix_len_, double ires_orf_lambda_)
         : beam_size(beam_size_), num_epochs(num_epochs_), learning_rate(learning_rate_), epsilon(epsilon_),
-          init_solution(init_solution_), is_verbose(is_verbose_), rand_seed(rand_seed_), ires(ires_), fixed_prefix_len(fixed_prefix_len_) {
+          init_solution(init_solution_), is_verbose(is_verbose_), rand_seed(rand_seed_), ires(ires_), fixed_prefix_len(fixed_prefix_len_), ires_orf_lambda(ires_orf_lambda_) {
         func1();
 }
 

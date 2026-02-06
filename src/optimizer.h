@@ -10,6 +10,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <unordered_set>
+#include <cmath>
 
 #include "Utils/network.h"
 #include "Utils/codon.h"
@@ -132,6 +133,7 @@ public:
     std::string init_solution;
     std::string ires;
     int fixed_prefix_len = 0;
+    double ires_orf_lambda = 1.0;  // Penalty factor for IRES-ORF base pairing (1.0 = no penalty, <1.0 discourages such pairs)
     int* nucs = nullptr;
 
     using State_t = State<ScoreType>;
@@ -145,7 +147,7 @@ public:
     using sorted_BestM_t = unordered_map<NodeType, vector<ScoreInnerDate_t>, hash_pair>;
     using PrefixScore_t = unordered_map<NodeType, ScoreType, hash_pair>;
 
-    Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_, std::string ires_, int fixed_prefix_len_ = 0);
+    Optimizer(int beam_size_, int num_epochs_, double learning_rate_, double epsilon_, std::string init_solution_, bool is_verbose_, unsigned int rand_seed_, std::string ires_, int fixed_prefix_len_ = 0, double ires_orf_lambda_ = 1.0);
 
     void optimize(DFA_t& dfa,
         Codon& codon, 
@@ -180,6 +182,43 @@ private:
     
     template <PhaseOption phase>
     void C_beam(IndexType j, IndexType j_num, DFA_t& dfa);
+
+    // Helper methods for IRES-ORF penalty
+    // Check if absolute position is in IRES region
+    inline bool is_ires_position(IndexType abs_pos) const {
+        return abs_pos < fixed_prefix_len;
+    }
+    
+    // Check if absolute position is in ORF region  
+    inline bool is_orf_position(IndexType abs_pos) const {
+        return abs_pos >= fixed_prefix_len && abs_pos < seq_length;
+    }
+    
+    // Check if a base pair (i_abs, j_abs) spans IRES and ORF regions
+    // Returns true if one position is in IRES and the other is in ORF
+    inline bool is_cross_region_pair(IndexType i_abs, IndexType j_abs) const {
+        if (fixed_prefix_len == 0) return false;  // No IRES, no penalty
+        bool i_in_ires = is_ires_position(i_abs);
+        bool j_in_ires = is_ires_position(j_abs);
+        return i_in_ires != j_in_ires;  // XOR: true if exactly one is in IRES
+    }
+    
+    // Get the log penalty for IRES-ORF base pairing
+    // Returns log(lambda) which is added to the score
+    // When lambda < 1, log(lambda) < 0, which decreases the partition function contribution
+    inline ScoreType get_ires_orf_penalty() const {
+        if (ires_orf_lambda >= 1.0 - 1e-10) return 0.0;  // No penalty
+        return std::log(ires_orf_lambda);
+    }
+    
+    // Apply IRES-ORF penalty if the pair spans regions
+    // i_abs and j_abs are absolute positions (including IRES offset)
+    inline ScoreType apply_cross_region_penalty(IndexType i_abs, IndexType j_abs) const {
+        if (is_cross_region_pair(i_abs, j_abs)) {
+            return get_ires_orf_penalty();
+        }
+        return 0.0;
+    }
 
 
 

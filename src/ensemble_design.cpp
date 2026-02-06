@@ -19,6 +19,7 @@ int main(int argc, char** argv) {
     unsigned int rand_seed = 0;
     string init_solution = "";
     string ires = "";
+    double ires_orf_lambda = 1.0;  // Penalty factor for IRES-ORF base pairing (1.0 = no penalty)
 
     string CODON_TABLE = "./codon_usage_freq_table_human.csv";
 
@@ -29,6 +30,7 @@ int main(int argc, char** argv) {
     if (argc > 5) rand_seed = atoi(argv[5]);
     if (argc > 6) init_solution = argv[6];
     if (argc > 7) ires = argv[7];
+    if (argc > 8) ires_orf_lambda = atof(argv[8]);
 
     Codon codon(CODON_TABLE);
     std::unordered_map<std::string, Lattice> aa_graphs_with_ln_weights;
@@ -70,7 +72,7 @@ int main(int argc, char** argv) {
         if (!ReaderTraits<Fasta>::cvt_to_seq(aa_seq, aa_tri_seq)) 
             continue;
 
-        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, ires, ires.length());
+        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, ires, ires.length(), ires_orf_lambda);
 
         auto protein = util::split(aa_tri_seq, ' ');
         auto dfa = get_dfa(aa_graphs_with_ln_weights, util::split(aa_tri_seq, ' '));
