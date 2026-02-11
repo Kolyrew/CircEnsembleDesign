@@ -1,0 +1,9 @@
+IRES DFA initialized: 72 positions, 72 edges
+IRES-ORF boundary penalty enabled (circular RNA): lambda = 0.01
+  Boundary zone: last 20 nt of ORF (DFA positions 79-98)
+  Energy penalty per pair: 4.60517 kT = 2.83826 kcal/mol
+Iteration [1]: obj: -56.3658
+Iteration [2]: obj: -63.4944
+Iteration [3]: obj: -67.0870
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final mRNA sequence: UUCGUUGCUUUUUGUAGUAUAAUUAAAUAUUUGUCAUAUAAGAGAUUGGUUAGAGAUUUGUUCUUUGUUUGAAUGGCUACUGUGCUACUGGCGCUUCUGGUUUAUUUAGGUGCGUUAGUUGACGCUUACCCAAUUAAGCCAGAAGCGCCAGGUGAGGACGCUUUCUUAGGU
