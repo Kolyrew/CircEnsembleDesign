@@ -1,4 +1,5 @@
-Cross-pair detection: prob_threshold = 0.01, max_cross_pairs = 5, IRES=[1,72], ORF=[73,153]
+pair_blocked enabled: IRES=[1,72], ORF=[73,153]
+Cross-pair detection: prob_threshold = 0.01, max_cross_pairs = 5
 Iteration [ 1]: obj: -45.6513 | cross-pairs(P>0.0100): 50 max_P=0.9238 sum_P=17.7795 | REJECTED (>5)
 Iteration [ 2]: obj: -48.3878 | cross-pairs(P>0.0100): 50 max_P=0.9238 sum_P=17.7795 | REJECTED (>5)
 Iteration [ 3]: obj: -50.6086 | cross-pairs(P>0.0100): 50 max_P=0.9238 sum_P=17.7783 | REJECTED (>5)

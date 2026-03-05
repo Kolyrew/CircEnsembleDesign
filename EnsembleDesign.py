@@ -71,6 +71,37 @@ def eval_partition(seq):
     partition_result = result.stderr.strip()
     return float(partition_result.split(' ')[-2].strip())
 
+
+def count_cross_pairs_probabilistic(seq, ires_len, prob_threshold=0.01):
+    """Count IRES-ORF cross-pairs using base pair probability matrix P(i,j) > threshold."""
+    if ires_len == 0:
+        return 0, [], 0.0
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        full_command = f"cd ./tools/LinearPartition && echo {seq} | ./linearpartition -V -c {prob_threshold} -r {tmp_path}"
+        subprocess.run(full_command, shell=True, capture_output=True, text=True)
+        cross_pairs = []
+        sum_prob = 0.0
+        with open(tmp_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) != 3:
+                    continue
+                i, j, prob = int(parts[0]), int(parts[1]), float(parts[2])
+                i_in_ires = (1 <= i <= ires_len)
+                j_in_ires = (1 <= j <= ires_len)
+                if i_in_ires != j_in_ires:
+                    cross_pairs.append((i, j, prob))
+                    sum_prob += prob
+        return len(cross_pairs), cross_pairs, sum_prob
+    except Exception:
+        return 0, [], 0.0
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
 def process_run_file(file_path):
     with open(file_path, 'r') as file:
         lines = file.readlines()
@@ -82,7 +113,7 @@ def process_run_file(file_path):
 def execute_mrna_design(protein, output_dir, run_number, args, progress_tracker, lock):
 
     mfe_solutoin = get_mfe_solutoin(protein, args.ires)
-    command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin} {args.ires} {args.ires_orf_lambda}"
+    command = f"echo {protein} | {prog_path} {args.beam_size} {args.num_iters} {args.lr} {args.epsilon} {run_number} {mfe_solutoin} {args.ires} {args.ires_orf_lambda} {args.cross_pair_prob_threshold} {args.max_cross_pairs}"
 
     output_path = os.path.join(output_dir, f"run_{run_number}.txt")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -146,6 +177,9 @@ def run_mrna_design(args):
 
     sys.stderr.write(f"All {total_runs} runs completed.\n")
 
+    ires_len = len(args.ires)
+    max_cp = args.max_cross_pairs
+
     width = int(math.log10(num_runs)) + 1;
     for seq_id, protein in records:
         log_dir = os.path.join(args.output_dir, seq_id)
@@ -157,16 +191,36 @@ def run_mrna_design(args):
             seq, efe = process_run_file(os.path.join(log_dir, run_file))
             results.append((run_id, seq, efe))
 
+        prob_thresh = args.cross_pair_prob_threshold
         logs = []
-        best_seq, best_efe = None, 0
+        candidates = []
         for run_id, seq, efe in sorted(results, key=lambda x: x[0]):
-            logs.append(f"[{run_id:>{width}}] {seq} | Ensemble Free Energy: {efe} kcal/mol")
+            cp_count = 0
+            cp_list = []
+            sum_prob = 0.0
+            if ires_len > 0:
+                cp_count, cp_list, sum_prob = count_cross_pairs_probabilistic(seq, ires_len, prob_thresh)
+            status = "OK" if cp_count <= max_cp else "REJECTED"
+            logs.append(f"[{run_id:>{width}}] {seq} | EFE: {efe} kcal/mol | cross-pairs(P>{prob_thresh}): {cp_count} sum_P={sum_prob:.4f} ({status})")
+            candidates.append((run_id, seq, efe, cp_count, cp_list))
 
-            if efe < best_efe:
-                best_seq, best_efe = seq, efe
-        logs.append(f"[Best] {best_seq} | Ensemble Free Energy: {best_efe} kcal/mol")
+        sorted_by_efe = sorted(candidates, key=lambda x: x[2])
+                                                                                                                                                                                
+        best_seq, best_efe, best_cp = None, 0, 0
+        for run_id, seq, efe, cp_count, cp_list in sorted_by_efe:
+            if cp_count <= max_cp:
+                best_seq, best_efe, best_cp = seq, efe, cp_count
+                break
 
-        print(f">{seq_id}|Ensemble Free Energy: {best_efe} kcal/mol\n{best_seq}")
+        if best_seq is None and sorted_by_efe:
+            fallback = min(sorted_by_efe, key=lambda x: (x[3], x[2]))
+            best_seq, best_efe, best_cp = fallback[1], fallback[2], fallback[3]
+            logs.append(f"[WARNING] No sequence with <= {max_cp} cross-pairs found, using best available ({best_cp} cross-pairs)")
+
+        logs.append(f"[Best] {best_seq} | EFE: {best_efe} kcal/mol | cross-pairs: {best_cp}")
+
+        cp_info = f"|Cross-pairs: {best_cp}" if ires_len > 0 else ""
+        print(f">{seq_id}|Ensemble Free Energy: {best_efe} kcal/mol{cp_info}\n{best_seq}")
 
         result_file = os.path.join(log_dir, "results.txt")
         with open(result_file, 'w') as f:
@@ -184,6 +238,8 @@ def main():
     parser.add_argument('--num_threads', type=int, default=8, help='Number of threads in the thread pool (default: 16)')
     parser.add_argument('--ires', type=str, default='', help='IRES sequence to prepend to the mRNA (default: empty)')
     parser.add_argument('--ires_orf_lambda', type=float, default=1.0, help='Penalty factor for IRES-ORF base pairing (default: 1.0, no penalty; use < 1.0 like 0.1 to discourage IRES-ORF pairs)')
+    parser.add_argument('--max_cross_pairs', type=int, default=5, help='Max allowed IRES-ORF cross-pairs (default: 5; sequences with more are rejected)')
+    parser.add_argument('--cross_pair_prob_threshold', type=float, default=0.01, help='Base pair probability threshold for cross-pair detection (default: 0.01)')
 
     args = parser.parse_args()
     run_mrna_design(args)

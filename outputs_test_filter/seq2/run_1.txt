@@ -1,0 +1,15 @@
+pair_blocked enabled: IRES=[1,97], ORF=[98,178]
+Cross-pair detection: prob_threshold = 0.01, max_cross_pairs = 5
+Iteration [ 1]: obj: -45.6513 | cross-pairs(P>0.0100): 10 max_P=0.9677 sum_P=2.8805 | REJECTED -> best NOT updated
+Iteration [ 2]: obj: -48.3878 | cross-pairs(P>0.0100): 10 max_P=0.9677 sum_P=2.8805 | REJECTED -> best NOT updated
+Iteration [ 3]: obj: -50.6086 | cross-pairs(P>0.0100): 10 max_P=0.9677 sum_P=2.8808 | REJECTED -> best NOT updated
+Iteration [ 4]: obj: -52.7878 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Iteration [ 5]: obj: -54.9851 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Iteration [ 6]: obj: -57.1977 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Iteration [ 7]: obj: -59.3137 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Iteration [ 8]: obj: -61.3322 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Iteration [ 9]: obj: -63.1883 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Iteration [10]: obj: -64.8581 | cross-pairs(P>0.0100): 0 max_P=0.0000 sum_P=0.0000 | OK -> best updated
+Final cross-pair analysis: 0 pairs with P>0.0100 (max_P=0.0000, sum_P=0.0000)
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final mRNA sequence: AAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGAGAUAUACCAUGAAAAAAAAAAAUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUAAAAAAAAAAAAUGAACGAGUAUCAGUUCGUGCUGCCUUACCCGCCGUCGCUCAAUACUUAUUGGCGACGGCGGGGUAGUCAGUACUACAUU

@@ -18,8 +18,12 @@ int main(int argc, char** argv) {
     bool is_verbose = true;
     unsigned int rand_seed = 0;
     string init_solution = "";
-    string ires = "";
-    double ires_orf_lambda = 1.0;  // Penalty factor for IRES-ORF base pairing (1.0 = no penalty)
+    string prefix = "";
+    string suffix = "";
+    int ires_end = 0;
+    double ires_orf_lambda = 1.0;
+    double cross_pair_prob_threshold = 0.01;
+    int max_cross_pairs = 5;
 
     string CODON_TABLE = "./codon_usage_freq_table_human.csv";
 
@@ -29,8 +33,29 @@ int main(int argc, char** argv) {
     if (argc > 4) epsilon = atof(argv[4]);
     if (argc > 5) rand_seed = atoi(argv[5]);
     if (argc > 6) init_solution = argv[6];
-    if (argc > 7) ires = argv[7];
-    if (argc > 8) ires_orf_lambda = atof(argv[8]);
+
+    bool has_named_args = false;
+    for (int i = 7; i < argc; i++) {
+        if (strncmp(argv[i], "--", 2) == 0) { has_named_args = true; break; }
+    }
+
+    if (has_named_args) {
+        for (int i = 7; i < argc; i++) {
+            string arg = argv[i];
+            if (arg == "--prefix" && i+1 < argc) { prefix = argv[++i]; }
+            else if (arg == "--suffix" && i+1 < argc) { suffix = argv[++i]; }
+            else if (arg == "--iresEND" && i+1 < argc) { ires_end = atoi(argv[++i]); }
+            else if (arg == "--lambda" && i+1 < argc) { ires_orf_lambda = atof(argv[++i]); }
+            else if (arg == "--cross_pair_prob_threshold" && i+1 < argc) { cross_pair_prob_threshold = atof(argv[++i]); }
+            else if (arg == "--max_cross_pairs" && i+1 < argc) { max_cross_pairs = atoi(argv[++i]); }
+        }
+    } else {
+        if (argc > 7) prefix = argv[7];
+        if (argc > 8) ires_orf_lambda = atof(argv[8]);
+        if (argc > 9) cross_pair_prob_threshold = atof(argv[9]);
+        if (argc > 10) max_cross_pairs = atoi(argv[10]);
+        ires_end = prefix.length();
+    }
 
     Codon codon(CODON_TABLE);
     std::unordered_map<std::string, Lattice> aa_graphs_with_ln_weights;
@@ -72,7 +97,7 @@ int main(int argc, char** argv) {
         if (!ReaderTraits<Fasta>::cvt_to_seq(aa_seq, aa_tri_seq)) 
             continue;
 
-        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, ires, ires.length(), ires_orf_lambda);
+        Optimizer parser(beam_size, num_epochs, learning_rate, epsilon, init_solution, is_verbose, rand_seed, prefix, prefix.length(), ires_orf_lambda, cross_pair_prob_threshold, max_cross_pairs, suffix, ires_end);
 
         auto protein = util::split(aa_tri_seq, ' ');
         auto dfa = get_dfa(aa_graphs_with_ln_weights, util::split(aa_tri_seq, ' '));
