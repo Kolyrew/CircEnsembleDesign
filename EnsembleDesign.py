@@ -73,7 +73,7 @@ def eval_partition(seq):
 
 
 def count_cross_pairs_probabilistic(seq, ires_len, prob_threshold=0.01):
-    """Count IRES-ORF cross-pairs using base pair probability matrix P(i,j) > threshold."""
+    """Count cross-pairs between IRES and all rest (ORF + suffix) using P(i,j) > threshold. 1-based: IRES = [1, ires_len]."""
     if ires_len == 0:
         return 0, [], 0.0
     import tempfile

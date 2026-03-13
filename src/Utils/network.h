@@ -293,6 +293,18 @@ public:
         return make_pair(best_sequence, best_logprob);
     }
 
+    pair<string, ScoreType> get_best_nuc_sequence_from(int offset, int orf_length) {
+        string best_sequence;
+        ScoreType best_logprob = util::value_zero<ScoreType>();
+        for (int i = offset; i < offset + orf_length; i += 3) {
+            if (i + 3 > offset + orf_length) break;
+            auto best_codon = find_best_codon(i);
+            best_sequence += best_codon.first;
+            best_logprob += best_codon.second;
+        }
+        return make_pair(best_sequence, best_logprob);
+    }
+
 private:
 
     pair<string, ScoreType> find_best_codon(int start) {
