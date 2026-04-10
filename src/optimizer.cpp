@@ -23,36 +23,42 @@ namespace EnsembleDesign {
 
 namespace {
 
-// Block pairing between IRES and all other parts (in DFA: ORF; full seq: ORF + suffix).
-// p1 = last 1-based position of IRES, p2 = first 1-based position of "rest".
+// Penalty for IRES <-> rest pairs. Uses the same boundary logic as pair_blocked
+// but returns log(lambda) instead of blocking: soft penalty, not hard block.
+// When lambda=1 -> penalty=0 (no effect). When lambda->0 -> penalty->-inf (≈hard block).
 int g_pair_block_p1 = -1;
 int g_pair_block_p2 = -1;
 bool g_pair_block_enabled = false;
+ScoreType g_cross_penalty = 0.0;
 
-void init_pair_block_params(int ires_end_val, IndexType total_seq_length) {
-    if (ires_end_val <= 0) {
+void init_pair_block_params(int ires_end_val, IndexType total_seq_length, double lambda) {
+    if (ires_end_val <= 0 || lambda >= 1.0 - 1e-10) {
         g_pair_block_enabled = false;
+        g_cross_penalty = 0.0;
         return;
     }
-    // IRES = 1-based [1, ires_end]; rest = 1-based [ires_end+1, ...] (ORF in DFA; ORF+suffix in full seq)
     int p1 = ires_end_val;
     int p2 = ires_end_val + 1;
     if (p1 < 1 || p2 < 1 || p1 >= static_cast<int>(total_seq_length)) {
         g_pair_block_enabled = false;
+        g_cross_penalty = 0.0;
         return;
     }
     g_pair_block_p1 = p1;
     g_pair_block_p2 = p2;
     g_pair_block_enabled = true;
+    g_cross_penalty = std::log(lambda);
 }
 
-// Returns true if the pair (i,j) is IRES <-> rest (forbidden). 0-based positions.
-inline bool pair_blocked(IndexType i, IndexType j) {
-    if (!g_pair_block_enabled) return false;
+// Returns log(lambda) if (i,j) crosses IRES <-> rest boundary, 0 otherwise. 0-based positions.
+inline ScoreType cross_penalty(IndexType i, IndexType j) {
+    if (!g_pair_block_enabled) return 0.0;
     if (i > j) std::swap(i, j);
     int i1 = static_cast<int>(i) + 1;
     int j1 = static_cast<int>(j) + 1;
-    return (i1 <= g_pair_block_p1) && (j1 >= g_pair_block_p2);
+    if ((i1 <= g_pair_block_p1) && (j1 >= g_pair_block_p2))
+        return g_cross_penalty;
+    return 0.0;
 }
 
 } // anonymous namespace
@@ -83,7 +89,7 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                 IndexType jnext = jnext_node.first;
                 IndexType hairpin_length = jnext + 1 - j; //special hairpin
 
-                if (pair_blocked(j, jnext)) continue;
+                ScoreType cp_jjnext = cross_penalty(j, jnext);
                 NucPairType pair_nuc = NTP(j_nuc, jnext_nuc);
 
 #ifdef SPECIAL_HP // TODO
@@ -93,7 +99,7 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                             auto sp_hairpin_seq =  get<0>(seq_score_weight);
                             auto sp_hairpin_path = dfa.findPath(sp_hairpin_seq, j_node, jnext_node);
                             assert(!sp_hairpin_path.empty());
-                            ScoreType score_sp_hairpin =  get<1>(seq_score_weight) / kT;
+                            ScoreType score_sp_hairpin =  get<1>(seq_score_weight) / kT + cp_jjnext;
                             Parameters params;
                             for (const auto& edge_ptr : sp_hairpin_path) {
                                 const auto& param_ptr = std::get<3>(*edge_ptr);
@@ -124,7 +130,7 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                             NucType jnext_1_nuc = std::get<2>(*jnext_ledge_ptr);
                             const auto& jnext_1_param = std::get<3>(*jnext_ledge_ptr);
 
-                            ScoreType score_hairpin = - func4(j, jnext, j_nuc, j1_nuc, jnext_1_nuc, jnext_nuc, tetra_hex_tri) / kT;
+                            ScoreType score_hairpin = - func4(j, jnext, j_nuc, j1_nuc, jnext_1_nuc, jnext_nuc, tetra_hex_tri) / kT + cp_jjnext;
                             Parameters params = {j_param, jnext_param, j1_param, jnext_1_param};
 
                             update_state<phase>(bestH[jnext_node][j_node][pair_nuc], score_hairpin, params);
@@ -165,7 +171,7 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                     IndexType jnext = jnext_node.first;
                     IndexType hairpin_length = jnext + 1 - i;
 
-                    if (pair_blocked(i, jnext)) continue;
+                    ScoreType cp_ijnext = cross_penalty(i, jnext);
                     NucPairType  pair_nuc_i_jnext = NTP(i_nuc, jnext_nuc);
 
 #ifdef SPECIAL_HP // TODO
@@ -176,7 +182,7 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
                                 auto sp_hairpin_seq =  get<0>(seq_score_weight);
                                 auto sp_hairpin_path = dfa.findPath(sp_hairpin_seq, i_node, jnext_node);
                                 assert(!sp_hairpin_path.empty());
-                                ScoreType score_sp_hairpin =  get<1>(seq_score_weight) / kT;
+                                ScoreType score_sp_hairpin =  get<1>(seq_score_weight) / kT + cp_ijnext;
                                 Parameters params;
                                 for (const auto& edge_ptr : sp_hairpin_path) {
                                     const auto& param = std::get<3>(*edge_ptr);
@@ -214,7 +220,7 @@ void Optimizer::hairpin_beam(IndexType j, IndexType j_num, DFA_t& dfa) {
 
                                 ScoreType score_hairpin =
                                         -func4(i, jnext, i_nuc, i1_nuc, jnext_1_nuc, jnext_nuc,
-                                                         tetra_hex_tri) / kT;
+                                                         tetra_hex_tri) / kT + cp_ijnext;
                                 Parameters params = {i_param, jnext_param, i1_param, jnext_1_param};
 
                                 update_state<phase>(bestH[jnext_node][i_node][pair_nuc_i_jnext], score_hairpin, params);
@@ -278,10 +284,10 @@ void Optimizer::Multi_beam(IndexType j, IndexType j_num, DFA_t& dfa){
 
                         Parameters params = {jnext_param};
 
-                        if (pair_blocked(i_node.first, jnext)) continue;
+                        ScoreType cp_multi = cross_penalty(i_node.first, jnext);
                         NucPairType pair_nuc_i_jnext = NTP(i_nuc, jnext_nuc);
 
-                        update_state<phase>(bestMulti[jnext1_node][i_node][pair_nuc_i_jnext], state_Multi, 0, params, state_Multi.pre_node);
+                        update_state<phase>(bestMulti[jnext1_node][i_node][pair_nuc_i_jnext], state_Multi, cp_multi, params, state_Multi.pre_node);
 
                     }
                 }
@@ -328,10 +334,9 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                         const auto &i_1_node = std::get<0>(*i_ledge_ptr);
                         const auto &i_1_nuc = std::get<2>(*i_ledge_ptr);
                         const auto &i_1_param = std::get<3>(*i_ledge_ptr);
-                        if (pair_blocked(i_1_node.first, j)) continue;
                         auto outer_pair = NTP(i_1_nuc, j_nuc);
                         if (_allowed_pairs[i_1_nuc][j_nuc]) {
-                            ScoreType score_stacking = stacking_score[outer_pair - 1][pair_nuc - 1] / kT;
+                            ScoreType score_stacking = stacking_score[outer_pair - 1][pair_nuc - 1] / kT + cross_penalty(i_1_node.first, j);
                             Parameters params = {i_1_param, j_param};
 
                             update_state<phase>(bestP[j1_node][i_1_node][outer_pair], state_P, score_stacking, params);
@@ -361,7 +366,6 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
 
                             auto q_nuc = std::get<1>(q_node_nuc_param);
                             const auto &q_param = std::get<2>(q_node_nuc_param);
-                            if (pair_blocked(i_1_node.first, q)) continue;
                             auto outer_pair = NTP(i_1_nuc, q_nuc);
 
                             for (const auto &q1_node2redges: dfa.auxiliary_right_edges[q_node]) {
@@ -372,7 +376,7 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                     q_nuc != q_nuc_)
                                     continue;
 
-                                ScoreType score_bulge = bulge_score[outer_pair - 1][pair_nuc - 1][q - j - 1] / kT;
+                                ScoreType score_bulge = bulge_score[outer_pair - 1][pair_nuc - 1][q - j - 1] / kT + cross_penalty(i_1_node.first, q);
                                 Parameters params = {i_1_param, q_param};
 
                                 update_state<phase>(bestP[q1_node][i_1_node][outer_pair], state_P, score_bulge, params);
@@ -414,8 +418,7 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                 const auto &p_1_node = std::get<0>(*p_ledge_ptr);
                                 const auto &p_1_param = std::get<3>(*p_ledge_ptr);
 
-                                if (pair_blocked(p_1_node.first, j)) continue;
-                                ScoreType score_bulge = bulge_score[outer_pair - 1][pair_nuc - 1][i - p - 1] / kT;
+                                ScoreType score_bulge = bulge_score[outer_pair - 1][pair_nuc - 1][i - p - 1] / kT + cross_penalty(p_1_node.first, j);
                                 Parameters params = {p_1_param, j_param};
 
                                 update_state<phase>(bestP[j1_node][p_1_node][outer_pair], state_P, score_bulge, params);
@@ -499,7 +502,7 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                     q_nuc != q_nuc_)
                                                     continue;
 
-                                                if (pair_blocked(p_1_node.first, q)) continue;
+                                                ScoreType cp_internal = cross_penalty(p_1_node.first, q);
                                                 auto &new_state_P = bestP[q1_node][p_1_node][NTP(p_1_nuc, q_nuc)];
 
                                                 // p_1 p ... i_1 i ... j_1 j ... q_1 q
@@ -511,12 +514,10 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                             *j_redge_ptr); //nucj_weightj.second;
 
                                                     if (q == j + 1) { // case: p_1 p ... i_1 i ... j_1 j q
-                                                        // Note: p and i are absolute, q and j are DFA positions
-                                                        // func5 expects absolute positions for all arguments
                                                         ScoreType score_internal =
                                                                 -func5(p - 1, q, i, j - 1, p_1_nuc, p_nuc,
                                                                                 j_nuc, q_nuc, i_1_nuc, i_nuc, j_1_nuc,
-                                                                                j_nuc) / kT;
+                                                                                j_nuc) / kT + cp_internal;
                                                         Parameters params = {p_param, p_1_param, j_param, q_param};
 
                                                         if (p == i - 1) { // case: p_1 p i ... j_1 j q
@@ -534,11 +535,10 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                             for (const auto &q_ledge_ptr: q_1_node2ledges.second) {
                                                                 const auto &q_1_nuc = std::get<2>(*q_ledge_ptr);
                                                                 const auto &q_1_param = std::get<3>(*q_ledge_ptr);
-                                                                // Note: p and i are absolute, q and j are DFA positions
                                                                 ScoreType score_internal =
                                                                         -func5(p - 1, q, i, j - 1, p_1_nuc,
                                                                                         p_nuc, q_1_nuc, q_nuc, i_1_nuc,
-                                                                                        i_nuc, j_1_nuc, j_nuc) / kT;
+                                                                                        i_nuc, j_1_nuc, j_nuc) / kT + cp_internal;
                                                                 Parameters params = {p_param, p_1_param, j_param,
                                                                                      q_1_param, q_param};
 
@@ -561,11 +561,10 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                             for (const auto &q_ledge_ptr: q_1_node2ledges.second) {
                                                                 const auto &q_1_nuc = std::get<2>(*q_ledge_ptr);
                                                                 const auto &q_1_param = std::get<3>(*q_ledge_ptr);
-                                                                // Note: p and i are absolute, q and j are DFA positions
                                                                 ScoreType score_internal =
                                                                         -func5(p - 1, q, i, j - 1, p_1_nuc,
                                                                                         p_nuc, q_1_nuc, q_nuc, i_1_nuc,
-                                                                                        i_nuc, j_1_nuc, j_nuc) / kT;
+                                                                                        i_nuc, j_1_nuc, j_nuc) / kT + cp_internal;
                                                                 Parameters params = {p_param, p_1_param, j_param,
                                                                                      q_1_param, q_param};
 
@@ -585,11 +584,10 @@ void Optimizer::P_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                                                             for (const auto &q_ledge_ptr: q_1_node2ledges.second) {
                                                                 const auto &q_1_nuc = std::get<2>(*q_ledge_ptr);
                                                                 const auto &q_1_param = std::get<3>(*q_ledge_ptr);
-                                                                // Note: p and i are absolute, q and j are DFA positions
                                                                 ScoreType score_internal =
                                                                         -func5(p - 1, q, i, j - 1, p_1_nuc,
                                                                                         p_nuc, q_1_nuc, q_nuc, i_1_nuc,
-                                                                                        i_nuc, j_1_nuc, j_nuc) / kT;
+                                                                                        i_nuc, j_1_nuc, j_nuc) / kT + cp_internal;
                                                                 Parameters params = {p_param, p_1_param, j_param, q_1_param, q_param};
 
                                                                 //double weight_left;
@@ -713,15 +711,15 @@ void Optimizer::M2_beam(IndexType j, IndexType j_num, DFA_t& dfa){
                         IndexType j_abs = j;
 
                         if (i - p + q - j_abs - 1 > SINGLE_MAX_LEN) continue;
-                        if (pair_blocked(p_node.first, q_node.first)) continue;
                         auto outer_pair = NTP(p_nuc, q_nuc);
+                        ScoreType cp_m2 = cross_penalty(p_node.first, q_node.first);
                         for (const auto& q_redge_ptr : dfa.right_edges[q_node]){
                             const auto& q_nuc_ = std::get<2>(*q_redge_ptr);
                             if (q_nuc != q_nuc_) continue;
                             const auto& q1_node = std::get<1>(*q_redge_ptr);
                             Parameters params = {p_param, q_param};
 
-                            update_state<phase>(bestMulti[q1_node][p_node][outer_pair], state_M2, 0, params, j_node);
+                            update_state<phase>(bestMulti[q1_node][p_node][outer_pair], state_M2, cp_m2, params, j_node);
                             break;
                         }
                     }
@@ -1193,7 +1191,7 @@ void Optimizer::optimize(
     best_path_in_one_codon_unit = best_path_in_one_codon;
 
     seq_length = fixed_prefix_len + 3 * static_cast<IndexType>(aa_seq.size());
-    init_pair_block_params(ires_end, seq_length);
+    init_pair_block_params(ires_end, seq_length, ires_orf_lambda);
     string full_init = ires + init_solution;
     next_pair.resize(NOTON);
     next_pair_set.resize(NOTON);
@@ -1228,10 +1226,11 @@ void Optimizer::optimize(
     dfa.validate_and_project_probabilities();
 
     int orf_len = seq_length - fixed_prefix_len;
-    if (ires_end > 0) {
-        cout << "pair_blocked: IRES=[0," << ires_end - 1 << "] vs rest=["
-             << ires_end << "," << seq_length - 1 << "] in DFA (0-based)" << endl;
-        cout << "GD-filter: IRES vs all rest (ORF+suffix) via RNAfold on full sequence" << endl;
+    if (ires_end > 0 && ires_orf_lambda < 1.0 - 1e-10) {
+        cout << "Cross-pair penalty: lambda=" << ires_orf_lambda
+             << " (energy penalty=" << std::setprecision(2) << (-kT * std::log(ires_orf_lambda))
+             << " kT) IRES=[0," << ires_end - 1 << "] vs rest=["
+             << ires_end << "," << seq_length - 1 << "]" << endl;
     }
 
     ScoreType best_obj = 0;
@@ -1258,30 +1257,10 @@ void Optimizer::optimize(
         if(end_state.inside > best_obj){
             auto current_seq = dfa.get_best_nuc_sequence_from(fixed_prefix_len, orf_len);
             std::string full_seq = ires + current_seq.first + suffix;
-
-            if (ires_end > 0) {
-                CrossPairInfo cp_info = count_cross_pairs_probabilistic(full_seq, cross_pair_prob_threshold);
-
-                cout << "Iteration [" << setw(width) << setfill(' ') << k << "]: obj: "
-                     << std::setprecision(4) << fixed << -end_state.inside
-                     << " | cross-pairs(P>" << cross_pair_prob_threshold << "): " << cp_info.count
-                     << " max_P=" << std::setprecision(4) << cp_info.max_prob
-                     << " sum_P=" << std::setprecision(4) << cp_info.sum_prob;
-
-                if (cp_info.count <= max_cross_pairs) {
-                    best_obj = end_state.inside;
-                    best_nuc_seq.first = full_seq;
-                    cout << " | OK -> best updated";
-                } else {
-                    cout << " | REJECTED (>" << max_cross_pairs << ")";
-                }
-                cout << endl;
-            } else {
-                best_obj = end_state.inside;
-                best_nuc_seq.first = full_seq;
-                cout << "Iteration [" << setw(width) << setfill(' ') << k << "]: obj: "
-                     << std::setprecision(4) << fixed << -end_state.inside << endl;
-            }
+            best_obj = end_state.inside;
+            best_nuc_seq.first = full_seq;
+            cout << "Iteration [" << setw(width) << setfill(' ') << k << "]: obj: "
+                 << std::setprecision(4) << fixed << -end_state.inside << endl;
         } else {
             cout << "Iteration [" << setw(width) << setfill(' ') << k << "]: obj: "
                  << std::setprecision(4) << fixed << -end_state.inside << endl;
@@ -1293,7 +1272,7 @@ void Optimizer::optimize(
         std::string final_full = ires + final_seq_pair.first + suffix;
         CrossPairInfo final_cp = count_cross_pairs_probabilistic(final_full, cross_pair_prob_threshold);
         cout << "Final cross-pairs (RNAfold): " << final_cp.count
-             << " (pair_blocked in DP: IRES-rest=0 by design)" << endl;
+             << " (lambda=" << ires_orf_lambda << ")" << endl;
     }
 
     cout << string(seq_length + fixed_suffix_len, '-') << endl;

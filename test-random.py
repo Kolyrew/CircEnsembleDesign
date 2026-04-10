@@ -137,11 +137,12 @@ def EFE(seq):
     return float(val.split(' ')[0])
 
 
-def EnsembleWrapper(seq, init, eps, iresEND=0):
+def EnsembleWrapper(seq, init, eps, iresEND=0, lam=0.1):
     params = ["./bin/EnsembleDesign"]
     params += list(map(str, [beam, iters, lr, eps, 1, init]))
     params += ["--prefix", prefix, "--suffix",
-               suffix, "--iresEND", str(iresEND)]
+               suffix, "--iresEND", str(iresEND),
+               "--lambda", str(lam)]
     res = exec(params, seq, "./")
     mRNA = find(res, "Final mRNA")
     print(" ".join(params))
