@@ -72,35 +72,56 @@ def eval_partition(seq):
     return float(partition_result.split(' ')[-2].strip())
 
 
-def count_cross_pairs_probabilistic(seq, ires_len, prob_threshold=0.01):
-    """Count cross-pairs between IRES and all rest (ORF + suffix) using P(i,j) > threshold. 1-based: IRES = [1, ires_len]."""
+def parse_dot_bracket_pairs(struct):
+    """Return list of paired indices (1-based) from dot-bracket structure."""
+    stack = []
+    pairs = []
+    for idx, c in enumerate(struct, start=1):
+        if c == '(':
+            stack.append(idx)
+        elif c == ')':
+            if not stack:
+                continue
+            i = stack.pop()
+            j = idx
+            if i < j:
+                pairs.append((i, j))
+            else:
+                pairs.append((j, i))
+    return pairs
+
+
+def count_cross_pairs_circular_rnafold(seq, ires_len):
+    """
+    Count cross-pairs between IRES and all rest using circular RNAfold structure.
+    IRES is 1-based interval [1, ires_len], rest is [ires_len+1, N].
+    """
     if ires_len == 0:
-        return 0, [], 0.0
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
-        tmp_path = tmp.name
+        return 0, [], ""
     try:
-        full_command = f"cd ./tools/LinearPartition && echo {seq} | ./linearpartition -V -c {prob_threshold} -r {tmp_path}"
-        subprocess.run(full_command, shell=True, capture_output=True, text=True)
+        # Use local wrapper and circular mode; --noPS keeps output simple.
+        res = subprocess.run(
+            ["python3", "./RNAfold", "--circ", "--noPS"],
+            input=seq + "\n",
+            cwd=".",
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        lines = (res.stdout + "\n" + res.stderr).splitlines()
+        if len(lines) < 2:
+            return 0, [], ""
+        struct = lines[1].split(" ")[0].strip()
+        pairs = parse_dot_bracket_pairs(struct)
         cross_pairs = []
-        sum_prob = 0.0
-        with open(tmp_path, 'r') as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) != 3:
-                    continue
-                i, j, prob = int(parts[0]), int(parts[1]), float(parts[2])
-                i_in_ires = (1 <= i <= ires_len)
-                j_in_ires = (1 <= j <= ires_len)
-                if i_in_ires != j_in_ires:
-                    cross_pairs.append((i, j, prob))
-                    sum_prob += prob
-        return len(cross_pairs), cross_pairs, sum_prob
+        for i, j in pairs:
+            i_in_ires = (1 <= i <= ires_len)
+            j_in_ires = (1 <= j <= ires_len)
+            if i_in_ires != j_in_ires:
+                cross_pairs.append((i, j))
+        return len(cross_pairs), cross_pairs, struct
     except Exception:
-        return 0, [], 0.0
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        return 0, [], ""
 
 def process_run_file(file_path):
     with open(file_path, 'r') as file:
@@ -191,17 +212,18 @@ def run_mrna_design(args):
             seq, efe = process_run_file(os.path.join(log_dir, run_file))
             results.append((run_id, seq, efe))
 
-        prob_thresh = args.cross_pair_prob_threshold
         logs = []
         candidates = []
         for run_id, seq, efe in sorted(results, key=lambda x: x[0]):
             cp_count = 0
             cp_list = []
-            sum_prob = 0.0
+            circ_struct = ""
             if ires_len > 0:
-                cp_count, cp_list, sum_prob = count_cross_pairs_probabilistic(seq, ires_len, prob_thresh)
+                cp_count, cp_list, circ_struct = count_cross_pairs_circular_rnafold(seq, ires_len)
             status = "OK" if cp_count <= max_cp else "REJECTED"
-            logs.append(f"[{run_id:>{width}}] {seq} | EFE: {efe} kcal/mol | cross-pairs(P>{prob_thresh}): {cp_count} sum_P={sum_prob:.4f} ({status})")
+            logs.append(f"[{run_id:>{width}}] {seq} | EFE: {efe} kcal/mol | circular cross-pairs: {cp_count} ({status})")
+            if circ_struct:
+                logs.append(f"    circ_struct: {circ_struct}")
             candidates.append((run_id, seq, efe, cp_count, cp_list))
 
         sorted_by_efe = sorted(candidates, key=lambda x: x[2])

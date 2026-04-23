@@ -2,17 +2,38 @@
 import sys
 import RNA
 
-seq = ""
-for line in sys.stdin:
-    line = line.strip()
-    if line and not line.startswith(">"):
-        seq += line
 
-if not seq:
-    sys.exit(1)
+def parse_args(argv):
+    circ = False
+    for a in argv[1:]:
+        if a in ("--circ", "-c"):
+            circ = True
+    return circ
 
-fc = RNA.fold_compound(seq)
-structure, mfe = fc.mfe()
 
-print(seq)
-print(f"{structure} ({mfe:.2f})")
+def read_seq_from_stdin():
+    seq = ""
+    for line in sys.stdin:
+        line = line.strip()
+        if line and not line.startswith(">"):
+            seq += line
+    return seq
+
+
+def main():
+    circ = parse_args(sys.argv)
+    seq = read_seq_from_stdin()
+    if not seq:
+        sys.exit(1)
+
+    md = RNA.md()
+    md.circ = 1 if circ else 0
+    fc = RNA.fold_compound(seq, md)
+    structure, mfe = fc.mfe()
+
+    print(seq)
+    print(f"{structure} ({mfe:.2f})")
+
+
+if __name__ == "__main__":
+    main()
